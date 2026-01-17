@@ -1,9 +1,42 @@
-:root {
-  font-family: "Segoe UI", system-ui, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color: #0f172a;
-  background-color: #f8fafc;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222.2 47.4% 11.2%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 47.4% 11.2%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 47.4% 11.2%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.75rem;
+    --nav-height: 64px;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+  }
 }
 
 * {
@@ -80,7 +113,7 @@ label {
   background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
   border-bottom: 1px solid #e2e8f0;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
-  z-index: 40;
+  z-index: 80;
 }
 
 .nav-container {
@@ -91,6 +124,7 @@ label {
   gap: 1.5rem;
   align-items: center;
   justify-content: flex-start;
+  min-height: var(--nav-height);
 }
 
 .nav-left {
@@ -131,6 +165,41 @@ label {
   margin-left: auto;
 }
 
+.nav-toggle {
+  display: none;
+  margin-left: auto;
+  border-radius: 10px;
+  padding: 0.4rem 0.55rem;
+  border-color: #cbd5f5;
+  background: #ffffff;
+  width: 44px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.nav-toggle-bar {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: #1f2937;
+  margin: 4px 0;
+  border-radius: 999px;
+}
+
+.nav-toggle.open .nav-toggle-bar:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.nav-toggle.open .nav-toggle-bar:nth-child(2) {
+  opacity: 0;
+}
+
+.nav-toggle.open .nav-toggle-bar:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
 .nav-item {
   position: relative;
   display: flex;
@@ -154,6 +223,7 @@ label {
   top: calc(100% + 0.5rem);
   left: 0;
   min-width: 280px;
+  width: min(320px, 90vw);
   background: #ffffff;
   border-radius: 12px;
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
@@ -161,6 +231,8 @@ label {
   display: grid;
   gap: 0.75rem;
   z-index: 30;
+  max-height: 70vh;
+  overflow: auto;
 }
 
 .nav-menu input {
@@ -180,6 +252,69 @@ label {
 .nav-menu-actions {
   display: grid;
   gap: 0.5rem;
+}
+
+.nav-mobile {
+  position: fixed;
+  top: var(--nav-height);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  padding: 0.9rem 1.5rem 1.2rem;
+  display: grid;
+  gap: 1rem;
+  box-shadow: 0 16px 24px rgba(15, 23, 42, 0.12);
+  max-height: calc(100vh - var(--nav-height));
+  overflow: auto;
+  z-index: 90;
+}
+
+.nav-mobile-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 70;
+}
+
+.nav-mobile-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.nav-mobile-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.nav-mobile-profile {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.nav-mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.nav-mobile-header .avatar-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+}
+
+.nav-close {
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
 }
 
 .profile {
@@ -377,7 +512,7 @@ label {
 
 .issues-toolbar {
   display: grid;
-  grid-template-columns: repeat(5, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.75rem;
   align-items: center;
 }
@@ -393,6 +528,7 @@ label {
   justify-content: space-between;
   gap: 1rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .issue-details h4,
@@ -441,6 +577,8 @@ label {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .comment-body {
@@ -586,9 +724,113 @@ label {
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  z-index: 20;
+  z-index: 120;
 }
 
 .modal {
   width: min(520px, 100%);
+  max-height: calc(100dvh - 3rem);
+  overflow: auto;
+}
+
+@media (max-width: 640px) {
+  .modal-backdrop {
+    align-items: flex-start;
+    padding: 0.75rem;
+    padding-top: calc(var(--nav-height) + 0.75rem);
+  }
+
+  .modal {
+    width: 100%;
+    max-height: calc(100dvh - var(--nav-height) - 1.5rem);
+  }
+}
+
+@media (max-width: 1024px) {
+  .nav-container {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .nav-center,
+  .nav-actions {
+    display: none;
+  }
+
+  .nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .app {
+    padding-top: 6.8rem;
+  }
+
+  .split-60-40 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .row > * {
+    width: 100%;
+  }
+
+  .issues-toolbar,
+  .members-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .nav-container {
+    gap: 0.75rem;
+  }
+
+  .nav-center,
+  .nav-actions {
+    gap: 0.5rem;
+  }
+
+  .project-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .project-meta {
+    justify-items: start;
+  }
+
+  .member-card {
+    grid-template-columns: 1fr;
+  }
+
+  .member-actions {
+    justify-items: start;
+  }
+
+  .comments .row input {
+    max-width: 100%;
+  }
+
+  .toast-stack {
+    right: 0.75rem;
+    left: 0.75rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .app {
+    padding: 6.4rem 1rem 1.5rem;
+  }
+
+  .nav-button {
+    padding: 0.4rem 0.7rem;
+  }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import './style.css'
 import {
   addComment,
@@ -22,14 +22,30 @@ import {
   updateIssue,
 } from './api'
 import type { Comment, Issue, Member, Membership, Project, User } from './types'
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Menu } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Toaster } from "@/components/ui/toaster"
+import { toast } from "@/components/ui/use-toast"
 
 type AuthMode = 'login' | 'signup'
 type ViewMode = 'dashboard' | 'projects' | 'issues'
 type NavMenu = 'projects' | 'issues' | null
 type IssueWithProject = Issue & { project_name?: string }
 type SelectOption = { value: string; label: string }
-type ToastType = 'success' | 'error'
-type Toast = { id: number; type: ToastType; message: string }
+
+const emailRegex = /^\S+@\S+\.\S+$/
+
+function isValidEmail(email: string) {
+  return emailRegex.test(email)
+}
 
 type SearchableSelectProps = {
   options: SelectOption[]
@@ -182,7 +198,7 @@ export default function App() {
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [activeView, setActiveView] = useState<ViewMode>('dashboard')
   const [openMenu, setOpenMenu] = useState<NavMenu>(null)
-  const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [membership, setMembership] = useState<Membership | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [issues, setIssues] = useState<Issue[]>([])
@@ -219,8 +235,6 @@ export default function App() {
   const [addCommentLoading, setAddCommentLoading] = useState(false)
   const [createUserLoading, setCreateUserLoading] = useState(false)
   const [removeMemberLoading, setRemoveMemberLoading] = useState<number | null>(null)
-  const [toasts, setToasts] = useState<Toast[]>([])
-  const toastIdRef = useRef(0)
 
   const isMaintainer = membership?.role === 'maintainer'
   const pageSize = 10
@@ -282,24 +296,15 @@ export default function App() {
     }
   }, [issues, selectedIssue])
 
-  function pushToast(type: ToastType, message: string) {
-    const id = toastIdRef.current + 1
-    toastIdRef.current = id
-    setToasts((prev) => [...prev, { id, type, message }])
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id))
-    }, 4000)
-  }
-
   useEffect(() => {
     if (!statusMessage) return
-    pushToast('success', statusMessage)
+    toast({ description: statusMessage, variant: "success" })
     setStatusMessage(null)
   }, [statusMessage])
 
   useEffect(() => {
     if (!errorMessage) return
-    pushToast('error', errorMessage)
+    toast({ description: errorMessage, variant: "destructive" })
     setErrorMessage(null)
   }, [errorMessage])
 
@@ -445,20 +450,41 @@ export default function App() {
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setLoading(true)
     setErrorMessage(null)
     const form = new FormData(event.currentTarget)
+    const name = String(form.get('name') || '').trim()
+    const email = String(form.get('email') || '').trim()
+    const password = String(form.get('password') || '')
+    if (authMode === 'signup') {
+      if (!name || !email || !password) {
+        setErrorMessage('Name, email, and password are required.')
+        return
+      }
+    }
+    if (!email || !password) {
+      setErrorMessage('Email and password are required.')
+      return
+    }
+    if (!isValidEmail(email)) {
+      setErrorMessage('Enter a valid email address.')
+      return
+    }
+    if (password.length < 8) {
+      setErrorMessage('Password must be at least 8 characters.')
+      return
+    }
+    setLoading(true)
     try {
       if (authMode === 'signup') {
         await signup({
-          name: String(form.get('name') || ''),
-          email: String(form.get('email') || ''),
-          password: String(form.get('password') || ''),
+          name,
+          email,
+          password,
         })
       }
       const result = await login({
-        email: String(form.get('email') || ''),
-        password: String(form.get('password') || ''),
+        email,
+        password,
       })
       setToken(result.access_token)
       setAuthToken(result.access_token)
@@ -523,14 +549,20 @@ export default function App() {
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setLoading(true)
     setErrorMessage(null)
     const formElement = event.currentTarget
     const form = new FormData(formElement)
+    const name = String(form.get('name') || '').trim()
+    const key = String(form.get('key') || '').trim().toUpperCase()
+    if (!name || !key) {
+      setErrorMessage('Project name and key are required.')
+      return
+    }
+    setLoading(true)
     try {
       await createProject({
-        name: String(form.get('name') || ''),
-        key: String(form.get('key') || '').toUpperCase(),
+        name,
+        key,
         description: String(form.get('description') || ''),
       })
       formElement?.reset()
@@ -549,15 +581,20 @@ export default function App() {
     const form = new FormData(formElement)
     const projectIdValue = String(form.get('project_id') || '').trim()
     const projectId = projectIdValue ? Number(projectIdValue) : activeProject?.id
+    const title = String(form.get('title') || '').trim()
     if (!projectId) {
       setErrorMessage('Select a project before creating an issue.')
+      return
+    }
+    if (!title) {
+      setErrorMessage('Issue title is required.')
       return
     }
     try {
       setCreateIssueLoading(true)
       const created = await createIssue(projectId, {
-        title: String(form.get('title') || ''),
-        description: String(form.get('description') || ''),
+        title,
+        description: String(form.get('description') || '').trim(),
         priority: String(form.get('priority') || 'medium'),
         assignee_id: form.get('assignee_id')
           ? Number(form.get('assignee_id'))
@@ -588,14 +625,22 @@ export default function App() {
     if (!activeProject) return
     const formElement = event.currentTarget
     const form = new FormData(formElement)
+    const email = String(form.get('email') || '').trim()
+    const userIdValue = String(form.get('user_id') || '').trim()
+    if (!email && !userIdValue) {
+      setErrorMessage('Provide a user ID or email.')
+      return
+    }
+    if (email && !isValidEmail(email)) {
+      setErrorMessage('Enter a valid email address.')
+      return
+    }
+    if (userIdValue && Number.isNaN(Number(userIdValue))) {
+      setErrorMessage('User ID must be a number.')
+      return
+    }
     try {
       setAddMemberLoading(true)
-      const email = String(form.get('email') || '').trim()
-      const userIdValue = String(form.get('user_id') || '').trim()
-      if (!email && !userIdValue) {
-        setErrorMessage('Provide a user ID or email.')
-        return
-      }
       await addProjectMember(activeProject.id, {
         user_id: userIdValue ? Number(userIdValue) : undefined,
         email: email || undefined,
@@ -684,9 +729,14 @@ export default function App() {
     event.preventDefault()
     if (!activeProject || !selectedIssue) return
     const form = new FormData(event.currentTarget)
+    const title = String(form.get('title') || selectedIssue.title).trim()
+    if (!title) {
+      setErrorMessage('Issue title is required.')
+      return
+    }
     const payload = {
-      title: String(form.get('title') || selectedIssue.title),
-      description: String(form.get('description') || ''),
+      title,
+      description: String(form.get('description') || '').trim(),
       priority: String(form.get('priority') || selectedIssue.priority),
       status: isMaintainer ? String(form.get('status') || selectedIssue.status) : undefined,
       assignee_id: isMaintainer
@@ -728,13 +778,19 @@ export default function App() {
     if (!selectedIssue) return
     const formElement = event.currentTarget
     const form = new FormData(formElement)
+    const body = String(form.get('body') || '').trim()
+    if (!body) {
+      setErrorMessage('Comment cannot be empty.')
+      return
+    }
     try {
       setAddCommentLoading(true)
       const comment = await addComment(selectedIssue.id, {
-        body: String(form.get('body') || ''),
+        body,
       })
       setComments((prev) => [...prev, comment])
       formElement?.reset()
+      setStatusMessage('Comment added.')
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to add comment')
     } finally {
@@ -846,6 +902,14 @@ export default function App() {
       setErrorMessage('Name, email, and password are required.')
       return
     }
+    if (!isValidEmail(email)) {
+      setErrorMessage('Enter a valid email address.')
+      return
+    }
+    if (password.length < 8) {
+      setErrorMessage('Password must be at least 8 characters.')
+      return
+    }
 
     try {
       setCreateUserLoading(true)
@@ -868,7 +932,7 @@ export default function App() {
     : issueSource
 
   const issuesSection = allIssuesView || activeProject ? (
-    <div className="section card">
+    <Card className="section p-6">
       <div className="row">
         <h3>{allIssuesView ? 'All issues' : 'Issues'}</h3>
         <button
@@ -882,14 +946,6 @@ export default function App() {
         </button>
       </div>
       <div className="toolbar issues-toolbar">
-        <input
-          placeholder="Search title"
-          value={filters.q}
-          onChange={(event) => {
-            setFilters({ ...filters, q: event.target.value })
-            setPage(0)
-          }}
-        />
         <SearchableSelect
           options={statusFilterOptions}
           value={filters.status}
@@ -924,49 +980,62 @@ export default function App() {
         />
       </div>
 
-      <div className="section grid grid-2">
-        <div className="list">
+      <div className="section grid items-start gap-6 lg:grid-cols-2">
+        <div className="self-start space-y-3">
+          <Input
+            placeholder="Search by id or title"
+            value={filters.q}
+            onChange={(event) => {
+              setFilters({ ...filters, q: event.target.value })
+              setPage(0)
+            }}
+          />
           <p className="muted">
             Showing {pagedIssues.length === 0 ? 0 : page * pageSize + 1}-
             {page * pageSize + pagedIssues.length} of {issueTotalCount}
           </p>
-          {pagedIssues.map((issue) => (
-            <button key={issue.id} onClick={() => handleSelectIssue(issue)}>
-              <div className="row">
-                <div>
+          <div className="list max-h-[calc(100dvh-var(--nav-height)-16rem)] overflow-auto pr-2">
+            {pagedIssues.map((issue) => (
+              <Button
+                key={issue.id}
+                variant="ghost"
+                className="w-full justify-between"
+                onClick={() => handleSelectIssue(issue)}
+              >
+                <div className="text-left">
                   <strong>{issue.title}</strong>
-                  <div className="muted">
+                  <div className="text-sm text-muted-foreground">
                     {issue.status} · {issue.priority}
                     {allIssuesView ? ` · ${resolveProjectName(issue.project_id)}` : ''}
                   </div>
                 </div>
-                <span className="badge">#{issue.id}</span>
-              </div>
-            </button>
-          ))}
-          {issueSource.length === 0 ? <p className="muted">No issues found.</p> : null}
+                <Badge variant="secondary">#{issue.id}</Badge>
+              </Button>
+            ))}
+            {issueSource.length === 0 ? <p className="muted">No issues found.</p> : null}
+          </div>
           <div className="row">
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={() => setPage((prev) => Math.max(prev - 1, 0))}
               disabled={page === 0}
             >
               Previous
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => setPage((prev) => prev + 1)}
               disabled={page * pageSize + pagedIssues.length >= issueTotalCount}
             >
               Next
-            </button>
+            </Button>
           </div>
         </div>
 
-        <div className="card issue-details">
+        <Card className="p-6 issue-details">
           <div className="row">
             <h4>Issue details</h4>
-            {selectedIssue ? <span className="badge">#{selectedIssue.id}</span> : null}
+            {selectedIssue ? <Badge variant="secondary">#{selectedIssue.id}</Badge> : null}
           </div>
           {selectedIssue ? (
             <>
@@ -996,78 +1065,84 @@ export default function App() {
                   <strong>{new Date(selectedIssue.updated_at).toLocaleString()}</strong>
                 </div>
               </div>
-              <form className="grid" onSubmit={handleUpdateIssue}>
-                <label>
-                  Title
-                  <input name="title" required defaultValue={selectedIssue.title} />
-                </label>
-                <label>
-                  Description
-                  <textarea
+              <form className="grid gap-4" onSubmit={handleUpdateIssue}>
+                <div className="grid gap-2">
+                  <Label htmlFor="issue-title-edit">Title</Label>
+                  <Input
+                    id="issue-title-edit"
+                    name="title"
+                    required
+                    defaultValue={selectedIssue.title}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="issue-desc-edit">Description</Label>
+                  <Textarea
+                    id="issue-desc-edit"
                     name="description"
                     rows={4}
                     defaultValue={selectedIssue.description ?? ''}
                   />
-                </label>
-                <label>
-                  Priority
+                </div>
+                <div className="grid gap-2">
+                  <Label>Priority</Label>
                   <SearchableSelect
                     name="priority"
                     defaultValue={selectedIssue.priority}
                     options={prioritySelectOptions}
                   />
-                </label>
+                </div>
                 {isMaintainer ? (
                   <>
-                    <label>
-                      Status
+                    <div className="grid gap-2">
+                      <Label>Status</Label>
                       <SearchableSelect
                         name="status"
                         defaultValue={selectedIssue.status}
                         options={statusSelectOptions}
                       />
-                    </label>
-                    <label>
-                      Assignee
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Assignee</Label>
                       <SearchableSelect
                         name="assignee_id"
                         defaultValue={String(selectedIssue.assignee_id ?? '')}
                         options={assigneeSelectOptions}
                       />
-                    </label>
+                    </div>
                   </>
                 ) : null}
-                <button className="primary" type="submit" disabled={updateIssueLoading}>
+                <Button type="submit" disabled={updateIssueLoading}>
                   {updateIssueLoading ? (
                     <>
                       <span className="spinner" /> Updating...
                     </>
                   ) : (
-                    'Update issue'
+                    "Update issue"
                   )}
-                </button>
-                <button type="button" onClick={handleDeleteIssue} disabled={deleteIssueLoading}>
+                </Button>
+                <Button type="button" variant="outline" onClick={handleDeleteIssue} disabled={deleteIssueLoading}>
                   {deleteIssueLoading ? (
                     <>
                       <span className="spinner" /> Deleting...
                     </>
                   ) : (
-                    'Delete issue'
+                    "Delete issue"
                   )}
-                </button>
+                </Button>
               </form>
             </>
           ) : (
             <p className="muted">Select an issue to view details.</p>
           )}
-        </div>
+        </Card>
       </div>
 
       {selectedIssue ? (
         <div className="section comments">
           <div className="row">
             <h4>Comments</h4>
-            <input
+            <Input
               placeholder="Search comments"
               value={commentQuery}
               onChange={(event) => setCommentQuery(event.target.value)}
@@ -1078,51 +1153,57 @@ export default function App() {
           </p>
           <div className="list comment-list">
             {pagedComments.map((comment) => (
-              <div key={comment.id} className="comment-card">
+              <Card key={comment.id} className="comment-card">
                 <div className="comment-header">
-                  <span className="badge">#{comment.id}</span>
+                  <Badge variant="outline">#{comment.id}</Badge>
                   <span className="muted">{resolveMemberName(comment.author_id)}</span>
                   <span className="muted">
                     {new Date(comment.created_at).toLocaleString()}
                   </span>
                 </div>
                 <p className="comment-body">{comment.body}</p>
-              </div>
+              </Card>
             ))}
             {pagedComments.length === 0 ? <p className="muted">No comments found.</p> : null}
           </div>
           <div className="row">
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={() => setCommentPage((prev) => Math.max(prev - 1, 0))}
               disabled={commentPage === 0}
             >
               Previous
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => setCommentPage((prev) => prev + 1)}
               disabled={(commentPage + 1) * commentPageSize >= commentTotal}
             >
               Next
-            </button>
+            </Button>
           </div>
-          <form className="grid section" onSubmit={handleAddComment}>
-            <label>
-              Add comment
-              <textarea name="body" rows={3} required />
-            </label>
-            <button className="primary" type="submit">
-              Add comment
-            </button>
+          <form className="grid gap-4 section" onSubmit={handleAddComment}>
+            <div className="grid gap-2">
+              <Label htmlFor="comment-body">Add comment</Label>
+              <Textarea id="comment-body" name="body" rows={3} required />
+            </div>
+            <Button type="submit" disabled={addCommentLoading}>
+              {addCommentLoading ? (
+                <>
+                  <span className="spinner" /> Posting...
+                </>
+              ) : (
+                "Add comment"
+              )}
+            </Button>
           </form>
         </div>
       ) : null}
-    </div>
+    </Card>
   ) : (
-    <div className="section card">
+    <Card className="section p-6">
       <p className="muted">Select a project to see its issues.</p>
-    </div>
+    </Card>
   )
 
   if (!user) {
@@ -1131,91 +1212,109 @@ export default function App() {
         <div className="nav">
           <h2>IssueHub</h2>
         </div>
-        <div className="card">
+        <Card className="p-6">
           <h3>{authMode === 'login' ? 'Login' : 'Sign up'}</h3>
-          <form className="grid" onSubmit={handleLogin}>
+          <form className="grid gap-4" onSubmit={handleLogin}>
             {authMode === 'signup' ? (
               <>
-                <label>
-                  Name
-                  <input name="name" required />
-                </label>
+                <div className="grid gap-2">
+                  <Label htmlFor="auth-name">Name</Label>
+                  <Input id="auth-name" name="name" required />
+                </div>
               </>
             ) : null}
-            <label>
-              Email
-              <input name="email" type="email" required />
-            </label>
-            <label>
-              Password
-              <input name="password" type="password" required minLength={8} />
-            </label>
-            <button className="primary" type="submit" disabled={loading}>
+            <div className="grid gap-2">
+              <Label htmlFor="auth-email">Email</Label>
+              <Input id="auth-email" name="email" type="email" required />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="auth-password">Password</Label>
+              <Input id="auth-password" name="password" type="password" required minLength={8} />
+            </div>
+            <Button type="submit" disabled={loading}>
               {loading ? (
                 <>
                   <span className="spinner" /> Processing...
                 </>
               ) : authMode === 'login' ? (
-                'Login'
+                "Login"
               ) : (
-                'Create account'
+                "Create account"
               )}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="link"
+              variant="ghost"
               onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
             >
               {authMode === 'login' ? 'Need an account? Sign up' : 'Have an account? Login'}
-            </button>
+            </Button>
           </form>
           
-        </div>
+        </Card>
       </div>
     )
   }
 
   return (
     <>
-      <div className="toast-stack">
-        {toasts.map((toast) => (
-          <div key={toast.id} className={`toast ${toast.type}`}>
-            {toast.message}
-          </div>
-        ))}
-      </div>
+      <Toaster />
       <div className="app">
         <div className="nav-bar">
-          <div className="nav-container">
+          <Sheet
+            open={isMobileMenuOpen}
+            onOpenChange={(open) => {
+              setIsMobileMenuOpen(open)
+              setOpenMenu(null)
+            }}
+          >
+            <div className="nav-container">
             <div className="nav-left">
               <div className="logo">
                 <img src="/issuehub-logo.svg" alt="IssueHub logo" />
                 <span>IssueHub</span>
               </div>
             </div>
-            <div className="nav-center">
-          <div className="nav-item">
-                <button
-                  type="button"
-                  className="nav-button"
+            <SheetTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="nav-toggle"
+                aria-label="Open menu"
+                aria-expanded={isMobileMenuOpen}
+                aria-controls="mobile-nav"
+                onClick={() => {
+                  setIsMobileMenuOpen(true)
+                  setOpenMenu(null)
+                }}
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <div className="nav-center nav-desktop">
+              <div className="nav-item">
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() =>
                     setOpenMenu((prev) => (prev === 'projects' ? null : 'projects'))
                   }
                 >
                   Projects
-                </button>
+                </Button>
                 {openMenu === 'projects' ? (
                   <div className="nav-menu">
-                    <input
+                    <Input
                       placeholder="Search projects"
                       value={projectNavQuery}
                       onChange={(event) => setProjectNavQuery(event.target.value)}
                     />
                     <div className="nav-list">
                       {navProjectList.map((project) => (
-                        <button
+                        <Button
                           key={project.id}
-                          type="button"
+                          variant="ghost"
+                          className="justify-start"
                           onClick={() => {
                             setActiveProject(project)
                             setActiveView('issues')
@@ -1225,25 +1324,23 @@ export default function App() {
                           }}
                         >
                           {project.name} ({project.key})
-                        </button>
+                        </Button>
                       ))}
                       {navProjectList.length === 0 ? (
                         <p className="muted">No projects found.</p>
                       ) : null}
                     </div>
                     <div className="nav-menu-actions">
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
                         onClick={() => {
                           setShowProjectModal(true)
                           setOpenMenu(null)
                         }}
                       >
                         Create project
-                      </button>
-                      <button
-                        type="button"
-                        className="primary"
+                      </Button>
+                      <Button
                         onClick={() => {
                           setActiveView('projects')
                       setAllIssuesView(false)
@@ -1251,22 +1348,22 @@ export default function App() {
                         }}
                       >
                         Show all projects
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : null}
               </div>
               <div className="nav-item">
-                <button
-                  type="button"
-                  className="nav-button"
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setOpenMenu((prev) => (prev === 'issues' ? null : 'issues'))}
                 >
                   Issues
-                </button>
+                </Button>
                 {openMenu === 'issues' ? (
                   <div className="nav-menu">
-                    <input
+                    <Input
                       placeholder="Search issues"
                       value={issueNavQuery}
                       onChange={(event) => setIssueNavQuery(event.target.value)}
@@ -1274,9 +1371,10 @@ export default function App() {
                     />
                 <div className="nav-list">
                   {navIssueList.map((issue) => (
-                    <button
+                    <Button
                       key={issue.id}
-                      type="button"
+                      variant="ghost"
+                      className="justify-start"
                       onClick={() => {
                         handleSelectIssue(issue)
                         setActiveView('issues')
@@ -1285,7 +1383,7 @@ export default function App() {
                       }}
                     >
                       {issue.title}
-                    </button>
+                    </Button>
                   ))}
                   {navIssueList.length === 0 ? (
                     <p className="muted">
@@ -1294,18 +1392,16 @@ export default function App() {
                   ) : null}
                 </div>
                     <div className="nav-menu-actions">
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
                         onClick={() => {
                       openIssueModal()
                           setOpenMenu(null)
                         }}
                       >
                         Create issue
-                      </button>
-                      <button
-                        type="button"
-                        className="primary"
+                      </Button>
+                      <Button
                         onClick={() => {
                           setActiveView('issues')
                       setAllIssuesView(true)
@@ -1315,76 +1411,235 @@ export default function App() {
                         }}
                       >
                         Show all issues
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : null}
               </div>
             </div>
-            <div className="nav-actions">
-              <button
-                className="primary"
-                type="button"
-                onClick={() => {
-                  openIssueModal()
-                }}
-              >
-                Create Issue
-              </button>
+            <div className="nav-actions nav-desktop">
+              <Button onClick={openIssueModal}>Create Issue</Button>
               {isMaintainer ? (
-                <button type="button" onClick={openCreateUserModal}>
+                <Button variant="outline" onClick={openCreateUserModal}>
                   Create User
-                </button>
+                </Button>
               ) : null}
-              <div
-                className="profile"
-                onMouseEnter={() => setShowProfileMenu(true)}
-                onMouseLeave={() => setShowProfileMenu(false)}
-              >
-                <button
-                  type="button"
-                  className="avatar-button"
-                  onClick={() => setShowProfileMenu((prev) => !prev)}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="rounded-full">
+                    {getInitials(user.name)}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <div className="px-2 py-1.5 text-sm">
+                    <div className="font-semibold">{user.name}</div>
+                    <div className="text-muted-foreground">{user.email}</div>
+                  </div>
+                  <DropdownMenuItem
+                    onClick={() => setStatusMessage('Profile page coming soon.')}
+                  >
+                    Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            </div>
+            <SheetContent side="top" className="nav-mobile" id="mobile-nav">
+              <div className="nav-mobile-header">
+                <div className="nav-mobile-profile">
+                  <div className="avatar-button">{getInitials(user.name)}</div>
+                  <div className="profile-meta">
+                    <strong>{user.name}</strong>
+                    <span className="muted">{user.email}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="nav-mobile-section">
+                <p className="nav-mobile-title">Navigation</p>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setActiveView('projects')
+                    setAllIssuesView(false)
+                    setIsMobileMenuOpen(false)
+                  }}
                 >
-                  {getInitials(user.name)}
-                </button>
-                {showProfileMenu ? (
-                  <div className="profile-menu">
-                    <div className="profile-meta">
-                      <strong>{user.name}</strong>
-                      <span className="muted">{user.email}</span>
-                    </div>
-                    <button
-                      type="button"
+                  Projects
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setActiveView('issues')
+                    setAllIssuesView(true)
+                    setPage(0)
+                    loadAllIssues()
+                    setIsMobileMenuOpen(false)
+                  }}
+                >
+                  Issues
+                </Button>
+              </div>
+
+              <div className="nav-mobile-section">
+                <p className="nav-mobile-title">Actions</p>
+                <Button
+                  onClick={() => {
+                    openIssueModal()
+                    setIsMobileMenuOpen(false)
+                  }}
+                >
+                  Create Issue
+                </Button>
+                {isMaintainer ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      openCreateUserModal()
+                      setIsMobileMenuOpen(false)
+                    }}
+                  >
+                    Create User
+                  </Button>
+                ) : null}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setStatusMessage('Profile page coming soon.')
+                    setIsMobileMenuOpen(false)
+                  }}
+                >
+                  Profile
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    handleLogout()
+                    setIsMobileMenuOpen(false)
+                  }}
+                >
+                  Logout
+                </Button>
+              </div>
+
+              <div className="nav-mobile-section">
+                <p className="nav-mobile-title">Projects</p>
+                <Input
+                  placeholder="Search projects"
+                  value={projectNavQuery}
+                  onChange={(event) => setProjectNavQuery(event.target.value)}
+                />
+                <div className="nav-list">
+                  {navProjectList.map((project) => (
+                    <Button
+                      key={project.id}
+                      variant="outline"
                       onClick={() => {
-                        setStatusMessage('Profile page coming soon.')
-                        setShowProfileMenu(false)
+                        setActiveProject(project)
+                        setActiveView('issues')
+                        setSelectedIssue(null)
+                        setAllIssuesView(false)
+                        setIsMobileMenuOpen(false)
                       }}
                     >
-                      Profile
-                    </button>
-                    <button type="button" onClick={handleLogout}>
-                      Logout
-                    </button>
-                  </div>
-                ) : null}
+                      {project.name} ({project.key})
+                    </Button>
+                  ))}
+                  {navProjectList.length === 0 ? (
+                    <p className="muted">No projects found.</p>
+                  ) : null}
+                </div>
+                <div className="nav-menu-actions">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowProjectModal(true)
+                      setIsMobileMenuOpen(false)
+                    }}
+                  >
+                    Create project
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setActiveView('projects')
+                      setAllIssuesView(false)
+                      setIsMobileMenuOpen(false)
+                    }}
+                  >
+                    Show all projects
+                  </Button>
+                </div>
               </div>
-            </div>
-          </div>
+
+              <div className="nav-mobile-section">
+                <p className="nav-mobile-title">Issues</p>
+                <Input
+                  placeholder="Search issues"
+                  value={issueNavQuery}
+                  onChange={(event) => setIssueNavQuery(event.target.value)}
+                  disabled={allIssuesLoading}
+                />
+                <div className="nav-list">
+                  {navIssueList.map((issue) => (
+                    <Button
+                      key={issue.id}
+                      variant="outline"
+                      onClick={() => {
+                        handleSelectIssue(issue)
+                        setActiveView('issues')
+                        setAllIssuesView(false)
+                        setIsMobileMenuOpen(false)
+                      }}
+                    >
+                      {issue.title}
+                    </Button>
+                  ))}
+                  {navIssueList.length === 0 ? (
+                    <p className="muted">
+                      {issueNavQuery ? 'No issues found.' : 'No recent issues yet.'}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="nav-menu-actions">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      openIssueModal()
+                      setIsMobileMenuOpen(false)
+                    }}
+                  >
+                    Create issue
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setActiveView('issues')
+                      setAllIssuesView(true)
+                      setPage(0)
+                      loadAllIssues()
+                      setIsMobileMenuOpen(false)
+                    }}
+                  >
+                    Show all issues
+                  </Button>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
 
       
       {activeView === 'dashboard' ? (
         <>
-          <div className="grid grid-2 split-60-40">
-            <div className="card">
+          <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+            <Card className="p-6">
               <div className="row">
                 <h3>Projects</h3>
-                <button type="button" onClick={() => setShowProjectModal(true)}>
+                <Button variant="outline" onClick={() => setShowProjectModal(true)}>
                   Create Project
-                </button>
+                </Button>
               </div>
-              <input
+              <Input
                 placeholder="Search projects"
                 value={projectQuery}
                 onChange={(event) => setProjectQuery(event.target.value)}
@@ -1394,9 +1649,10 @@ export default function App() {
               </p>
               <div className="list">
                 {pagedProjects.map((project) => (
-                  <button
+                  <Button
                     key={project.id}
-                    className={project.id === activeProject?.id ? 'primary' : ''}
+                    variant={project.id === activeProject?.id ? "default" : "outline"}
+                    className="w-full justify-between"
                     onClick={() => {
                       setSelectedIssue(null)
                       setActiveProject(project)
@@ -1404,31 +1660,31 @@ export default function App() {
                     }}
                   >
                     {project.name} ({project.key})
-                  </button>
+                  </Button>
                 ))}
                 {pagedProjects.length === 0 ? (
                   <p className="muted">No projects found.</p>
                 ) : null}
               </div>
               <div className="row">
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
                   onClick={() => setProjectPage((prev) => Math.max(prev - 1, 0))}
                   disabled={projectPage === 0}
                 >
                   Previous
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => setProjectPage((prev) => prev + 1)}
                   disabled={(projectPage + 1) * projectPageSize >= projectTotal}
                 >
                   Next
-                </button>
+                </Button>
               </div>
-            </div>
+            </Card>
 
-            <div className="card">
+            <Card className="p-6">
               {activeProject ? (
                 <>
                   <div className="project-header">
@@ -1439,8 +1695,8 @@ export default function App() {
                       </p>
                     </div>
                     <div className="project-meta">
-                      <span className="pill">Role: {membership?.role ?? 'member'}</span>
-                      <span className="badge">Key: {activeProject.key}</span>
+                      <Badge variant="secondary">Role: {membership?.role ?? 'member'}</Badge>
+                      <Badge variant="outline">Key: {activeProject.key}</Badge>
                     </div>
                   </div>
 
@@ -1466,7 +1722,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="members-toolbar">
-                      <input
+                      <Input
                         placeholder="Search members"
                         value={memberQuery}
                         onChange={(event) => setMemberQuery(event.target.value)}
@@ -1477,7 +1733,7 @@ export default function App() {
                     </div>
                     <div className="list member-list">
                       {pagedMembers.map((member) => (
-                        <div key={member.user_id} className="member-card">
+                        <Card key={member.user_id} className="member-card">
                           <div className="member-avatar">
                             {getInitials(member.name)}
                           </div>
@@ -1486,11 +1742,11 @@ export default function App() {
                             <span className="muted">{member.email}</span>
                           </div>
                           <div className="member-actions">
-                            <span className="badge">{member.role}</span>
+                            <Badge variant="secondary">{member.role}</Badge>
                             {isMaintainer && user?.id !== member.user_id ? (
-                              <button
-                                type="button"
-                                className="danger"
+                              <Button
+                                variant="destructive"
+                                size="sm"
                                 onClick={() => handleRemoveMember(member.user_id)}
                                 disabled={removeMemberLoading === member.user_id}
                               >
@@ -1499,32 +1755,32 @@ export default function App() {
                                     <span className="spinner" /> Removing...
                                   </>
                                 ) : (
-                                  'Remove'
+                                  "Remove"
                                 )}
-                              </button>
+                              </Button>
                             ) : null}
                           </div>
-                        </div>
+                        </Card>
                       ))}
                       {pagedMembers.length === 0 ? (
                         <p className="muted">No members found.</p>
                       ) : null}
                     </div>
                     <div className="row">
-                      <button
-                        type="button"
+                      <Button
+                        variant="outline"
                         onClick={() => setMemberPage((prev) => Math.max(prev - 1, 0))}
                         disabled={memberPage === 0}
                       >
                         Previous
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
+                        variant="outline"
                         onClick={() => setMemberPage((prev) => prev + 1)}
                         disabled={(memberPage + 1) * memberPageSize >= memberTotal}
                       >
                         Next
-                      </button>
+                      </Button>
                     </div>
                     {isMaintainer ? (
                       <div className="member-form card">
@@ -1532,42 +1788,42 @@ export default function App() {
                           <h5>Add member</h5>
                           <span className="muted">Invite by ID or email</span>
                         </div>
-                        <form className="grid" onSubmit={handleAddMember}>
-                        <label>
-                          Find user
-                          <SearchableSelect
-                            name="user_id"
-                            placeholder="Search by name or email"
-                            searchPlaceholder="Type at least 2 characters"
-                            options={memberLookupOptions}
-                            onSearch={handleUserLookup}
-                            disabled={memberLookupLoading}
-                            emptyActionLabel="Create user"
-                            onEmptyAction={openCreateUserModal}
-                            minSearchCharsForAction={2}
-                          />
-                        </label>
-                          <label>
-                            Or add by email
-                            <input name="email" type="email" />
-                          </label>
-                          <label>
-                            Role
+                        <form className="grid gap-4" onSubmit={handleAddMember}>
+                          <div className="grid gap-2">
+                            <Label>Find user</Label>
+                            <SearchableSelect
+                              name="user_id"
+                              placeholder="Search by name or email"
+                              searchPlaceholder="Type at least 2 characters"
+                              options={memberLookupOptions}
+                              onSearch={handleUserLookup}
+                              disabled={memberLookupLoading}
+                              emptyActionLabel="Create user"
+                              onEmptyAction={openCreateUserModal}
+                              minSearchCharsForAction={2}
+                            />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="member-email">Or add by email</Label>
+                            <Input id="member-email" name="email" type="email" />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label>Role</Label>
                             <SearchableSelect
                               name="role"
                               defaultValue="member"
                               options={roleOptions}
                             />
-                          </label>
-                          <button className="primary" type="submit" disabled={addMemberLoading}>
+                          </div>
+                          <Button type="submit" disabled={addMemberLoading}>
                             {addMemberLoading ? (
                               <>
                                 <span className="spinner" /> Adding...
                               </>
                             ) : (
-                              'Add member'
+                              "Add member"
                             )}
-                          </button>
+                          </Button>
                           <p className="muted">Provide a user ID or email.</p>
                         </form>
                       </div>
@@ -1577,7 +1833,7 @@ export default function App() {
               ) : (
                 <p className="muted">Select a project to see its issues.</p>
               )}
-            </div>
+            </Card>
           </div>
 
           {issuesSection}
@@ -1585,12 +1841,12 @@ export default function App() {
       ) : null}
 
       {activeView === 'projects' ? (
-        <div className="section card">
+        <Card className="section p-6">
           <div className="row">
             <h3>All projects</h3>
-            <button type="button" onClick={() => setShowProjectModal(true)}>
+            <Button variant="outline" onClick={() => setShowProjectModal(true)}>
               Create project
-            </button>
+            </Button>
           </div>
           <input
             placeholder="Search projects"
@@ -1602,197 +1858,183 @@ export default function App() {
           </p>
           <div className="list">
             {pagedProjects.map((project) => (
-                <button
-                  key={project.id}
-                  className={project.id === activeProject?.id ? 'primary' : ''}
-                  onClick={() => {
-                    setSelectedIssue(null)
-                    setActiveProject(project)
-                    setActiveView('issues')
-                    setAllIssuesView(false)
-                  }}
-                >
+              <Button
+                key={project.id}
+                variant={project.id === activeProject?.id ? "default" : "outline"}
+                className="w-full justify-between"
+                onClick={() => {
+                  setSelectedIssue(null)
+                  setActiveProject(project)
+                  setActiveView('issues')
+                  setAllIssuesView(false)
+                }}
+              >
                 {project.name} ({project.key})
-              </button>
+              </Button>
             ))}
             {pagedProjects.length === 0 ? <p className="muted">No projects found.</p> : null}
           </div>
           <div className="row">
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={() => setProjectPage((prev) => Math.max(prev - 1, 0))}
               disabled={projectPage === 0}
             >
               Previous
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => setProjectPage((prev) => prev + 1)}
               disabled={(projectPage + 1) * projectPageSize >= projectTotal}
             >
               Next
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       ) : null}
 
       {activeView === 'issues' ? issuesSection : null}
       </div>
-      {showProjectModal ? (
-        <div className="modal-backdrop" role="presentation">
-          <div className="modal card" role="dialog" aria-modal="true">
-          <div className="row">
-            <h3>Create project</h3>
-            <button type="button" onClick={() => setShowProjectModal(false)}>
-              Close
-            </button>
-          </div>
+      <Dialog open={showProjectModal} onOpenChange={setShowProjectModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create project</DialogTitle>
+          </DialogHeader>
           <form
-            className="grid"
+            className="grid gap-4"
             onSubmit={async (event) => {
               await handleCreateProject(event)
               setShowProjectModal(false)
             }}
           >
-            <label>
-              Name
-              <input name="name" required />
-            </label>
-            <label>
-              Key
-              <input name="key" required />
-            </label>
-            <label>
-              Description
-              <textarea name="description" rows={3} />
-            </label>
-            <button className="primary" type="submit" disabled={loading}>
+            <div className="grid gap-2">
+              <Label htmlFor="project-name">Name</Label>
+              <Input id="project-name" name="name" required />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="project-key">Key</Label>
+              <Input id="project-key" name="key" required />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="project-desc">Description</Label>
+              <Textarea id="project-desc" name="description" rows={3} />
+            </div>
+            <Button type="submit" disabled={loading}>
               {loading ? (
                 <>
                   <span className="spinner" /> Saving...
                 </>
               ) : (
-                'Create'
+                "Create"
               )}
-            </button>
+            </Button>
           </form>
-          </div>
-        </div>
-      ) : null}
-      {showIssueModal ? (
-        <div className="modal-backdrop" role="presentation">
-          <div className="modal card" role="dialog" aria-modal="true">
-            <div className="row">
-              <h3>Create issue</h3>
-              <button type="button" onClick={() => setShowIssueModal(false)}>
-                Close
-              </button>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showIssueModal} onOpenChange={setShowIssueModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create issue</DialogTitle>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            onSubmit={async (event) => {
+              await handleCreateIssue(event)
+              setShowIssueModal(false)
+            }}
+          >
+            <div className="grid gap-2">
+              <Label>Project</Label>
+              <SearchableSelect
+                name="project_id"
+                required
+                defaultValue={activeProject?.id ? String(activeProject.id) : ''}
+                placeholder="Select a project"
+                options={projectSelectOptions}
+              />
             </div>
-            <form
-              className="grid"
-              onSubmit={async (event) => {
-                await handleCreateIssue(event)
-                setShowIssueModal(false)
-              }}
-            >
-              <label>
-                Project
-                <SearchableSelect
-                  name="project_id"
-                  required
-                  defaultValue={activeProject?.id ? String(activeProject.id) : ''}
-                  placeholder="Select a project"
-                  options={projectSelectOptions}
-                />
-              </label>
-              <label>
-                Title
-                <input name="title" required />
-              </label>
-              <label>
-                Description
-                <textarea name="description" rows={4} />
-              </label>
-              <label>
-                Priority
-                <SearchableSelect
-                  name="priority"
-                  defaultValue="medium"
-                  options={prioritySelectOptions}
-                />
-              </label>
-              {isMaintainer ? (
-                <label>
-                  Assignee
-                  <SearchableSelect
-                    name="assignee_id"
-                    defaultValue=""
-                    options={assigneeSelectOptions}
-                  />
-                </label>
-              ) : null}
-              <button className="primary" type="submit" disabled={createIssueLoading}>
-                {createIssueLoading ? (
-                  <>
-                    <span className="spinner" /> Saving...
-                  </>
-                ) : (
-                  'Create'
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
-      ) : null}
-      {showCreateUserModal ? (
-        <div className="modal-backdrop" role="presentation">
-          <div className="modal card" role="dialog" aria-modal="true">
-            <div className="row">
-              <h3>Create user</h3>
-              <button type="button" onClick={() => setShowCreateUserModal(false)}>
-                Close
-              </button>
+            <div className="grid gap-2">
+              <Label htmlFor="issue-title">Title</Label>
+              <Input id="issue-title" name="title" required />
             </div>
-            <form
-              className="grid"
-              onSubmit={async (event) => {
-                await handleCreateUser(event)
-                setShowCreateUserModal(false)
-              }}
-            >
-              <label>
-                Name
-                <input name="name" required />
-              </label>
-              <label>
-                Email
-                <input name="email" type="email" required />
-              </label>
-              <label>
-                Password
-                <input name="password" type="password" required minLength={8} />
-              </label>
-              <label>
-                Project
+            <div className="grid gap-2">
+              <Label htmlFor="issue-desc">Description</Label>
+              <Textarea id="issue-desc" name="description" rows={4} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Priority</Label>
+              <SearchableSelect
+                name="priority"
+                defaultValue="medium"
+                options={prioritySelectOptions}
+              />
+            </div>
+            {isMaintainer ? (
+              <div className="grid gap-2">
+                <Label>Assignee</Label>
                 <SearchableSelect
-                  name="project_id"
-                  placeholder="Select a project"
-                  options={projectSelectOptions}
+                  name="assignee_id"
+                  defaultValue=""
+                  options={assigneeSelectOptions}
                 />
-              </label>
-              <button className="primary" type="submit" disabled={createUserLoading}>
-                {createUserLoading ? (
-                  <>
-                    <span className="spinner" /> Creating...
-                  </>
-                ) : (
-                  'Create user'
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
-      ) : null}
+              </div>
+            ) : null}
+            <Button type="submit" disabled={createIssueLoading}>
+              {createIssueLoading ? (
+                <>
+                  <span className="spinner" /> Saving...
+                </>
+              ) : (
+                "Create"
+              )}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showCreateUserModal} onOpenChange={setShowCreateUserModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create user</DialogTitle>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            onSubmit={async (event) => {
+              await handleCreateUser(event)
+              setShowCreateUserModal(false)
+            }}
+          >
+            <div className="grid gap-2">
+              <Label htmlFor="user-name">Name</Label>
+              <Input id="user-name" name="name" required />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="user-email">Email</Label>
+              <Input id="user-email" name="email" type="email" required />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="user-password">Password</Label>
+              <Input id="user-password" name="password" type="password" required minLength={8} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Project</Label>
+              <SearchableSelect
+                name="project_id"
+                placeholder="Select a project"
+                options={projectSelectOptions}
+              />
+            </div>
+            <Button type="submit" disabled={createUserLoading}>
+              {createUserLoading ? (
+                <>
+                  <span className="spinner" /> Creating...
+                </>
+              ) : (
+                "Create user"
+              )}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
