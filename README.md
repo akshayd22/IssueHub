@@ -64,25 +64,39 @@ npm run dev
 ## API (REST)
 Base path: `/api`
 
+Auth
 - `POST /auth/signup`
 - `POST /auth/login`
 - `POST /auth/logout`
 - `GET /me`
+
+Projects
 - `POST /projects`
 - `GET /projects`
 - `POST /projects/{id}/members` (payload: `{ user_id?, email?, role }`)
 - `GET /projects/{id}/members`
+- `DELETE /projects/{id}/members/{user_id}`
 - `GET /projects/{id}/membership`
-- `GET /projects/{id}/issues` (returns `{ items, total, limit, offset }`)
+
+Issues (project-scoped)
+- `GET /projects/{id}/issues` (params: `q`, `status`, `priority`, `assignee`, `sort`, `limit`, `offset`)
 - `POST /projects/{id}/issues`
 - `GET /projects/{id}/issues/{issue_id}`
 - `PATCH /projects/{id}/issues/{issue_id}`
+- `PATCH /projects/{id}/issues/{issue_id}/status`
 - `DELETE /projects/{id}/issues/{issue_id}`
+
+Issues (global)
 - `GET /issues/{issue_id}`
 - `PATCH /issues/{issue_id}`
 - `DELETE /issues/{issue_id}`
+
+Comments
 - `GET /issues/{issue_id}/comments`
 - `POST /issues/{issue_id}/comments`
+
+Users
+- `GET /users/search?q=...`
 
 Errors are returned as `{ "error": { "code", "message", "details?" } }`.
 
