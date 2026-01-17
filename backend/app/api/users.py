@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_rate_limit
+from app.dao import users as user_dao
 from app.models.user import User
 from app.schemas.user import UserOut
 
@@ -16,10 +16,4 @@ def search_users(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[UserOut]:
-    pattern = f"%{q}%"
-    return (
-        db.query(User)
-        .filter(or_(User.name.ilike(pattern), User.email.ilike(pattern)))
-        .limit(20)
-        .all()
-    )
+    return user_dao.search_users(db, q)

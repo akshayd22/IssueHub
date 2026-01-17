@@ -1,6 +1,6 @@
-from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
+from app.dao import issues as issue_dao
 from app.models.issue import Issue, IssuePriority, IssueStatus
 
 
@@ -13,35 +13,27 @@ def create_issue(
     reporter_id: int,
     assignee_id: int | None,
 ) -> Issue:
-    issue = Issue(
-        project_id=project_id,
-        title=title,
-        description=description,
-        priority=priority,
-        reporter_id=reporter_id,
-        assignee_id=assignee_id,
+    return issue_dao.create_issue(
+        db,
+        project_id,
+        title,
+        description,
+        priority,
+        reporter_id,
+        assignee_id,
     )
-    db.add(issue)
-    db.commit()
-    db.refresh(issue)
-    return issue
 
 
 def get_issue(db: Session, issue_id: int) -> Issue | None:
-    return db.query(Issue).filter(Issue.id == issue_id).first()
+    return issue_dao.get_issue(db, issue_id)
 
 
 def delete_issue(db: Session, issue: Issue) -> None:
-    db.delete(issue)
-    db.commit()
+    issue_dao.delete_issue(db, issue)
 
 
 def update_issue(db: Session, issue: Issue, data: dict) -> Issue:
-    for key, value in data.items():
-        setattr(issue, key, value)
-    db.commit()
-    db.refresh(issue)
-    return issue
+    return issue_dao.update_issue(db, issue, data)
 
 
 def list_issues(
@@ -55,24 +47,14 @@ def list_issues(
     limit: int,
     offset: int,
 ) -> tuple[list[Issue], int]:
-    query = db.query(Issue).filter(Issue.project_id == project_id)
-
-    if q:
-        query = query.filter(Issue.title.ilike(f"%{q}%"))
-    if status:
-        query = query.filter(Issue.status == status)
-    if priority:
-        query = query.filter(Issue.priority == priority)
-    if assignee_id is not None:
-        query = query.filter(Issue.assignee_id == assignee_id)
-
-    if sort == "created_at":
-        query = query.order_by(desc(Issue.created_at))
-    elif sort == "priority":
-        query = query.order_by(desc(Issue.priority))
-    elif sort == "status":
-        query = query.order_by(asc(Issue.status))
-
-    total = query.order_by(None).count()
-    items = query.offset(offset).limit(limit).all()
-    return items, total
+    return issue_dao.list_issues(
+        db,
+        project_id,
+        q,
+        status,
+        priority,
+        assignee_id,
+        sort,
+        limit,
+        offset,
+    )

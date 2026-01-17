@@ -100,6 +100,14 @@ Users
 
 Errors are returned as `{ "error": { "code", "message", "details?" } }`.
 
+## API Contract + Deviations
+The implementation follows the provided contract with these additions:
+- `POST /projects/{id}/members` accepts `{ user_id, role }` or `{ email, role }`
+- Project-scoped issue detail/update/delete: `GET|PATCH|DELETE /projects/{id}/issues/{issue_id}`
+- Status-only update: `PATCH /projects/{id}/issues/{issue_id}/status`
+- Membership helpers: `GET /projects/{id}/members`, `DELETE /projects/{id}/members/{user_id}`, `GET /projects/{id}/membership`
+- User search: `GET /users/search?q=...`
+
 ## Tests
 Backend tests use a dedicated Postgres database:
 ```
@@ -107,6 +115,7 @@ cd backend
 set TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/issuehub_test
 pytest
 ```
+Test case summary: `docs/test-cases.md`
 
 ## Seed Script
 Create sample data (users, projects, issues, comments):
@@ -132,4 +141,11 @@ python -m scripts.seed
 - Add pagination UI controls with total counts.
 - Implement background jobs for notifications.
 - Add richer role management and project settings.
+
+## Requirement Coverage
+README includes:
+- Tech choices & trade-offs
+- Setup instructions (env vars, DB, migrations)
+- How to run (backend, frontend, tests)
+- Known limitations & what we'd do with more time
 

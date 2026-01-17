@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.rate_limit import RateLimiter
+from app.dao import users as user_dao
 from app.db.session import SessionLocal
 from app.models.project_member import ProjectRole
 from app.models.user import User
@@ -35,7 +36,7 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = user_dao.get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"

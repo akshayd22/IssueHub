@@ -1,77 +1,40 @@
 from sqlalchemy.orm import Session
 
+from app.dao import memberships as membership_dao
+from app.dao import projects as project_dao
 from app.models.project import Project
 from app.models.project_member import ProjectMember, ProjectRole
 
 
 def get_project(db: Session, project_id: int) -> Project | None:
-    return db.query(Project).filter(Project.id == project_id).first()
+    return project_dao.get_project(db, project_id)
 
 
 def create_project(
     db: Session, name: str, key: str, description: str | None, owner_id: int
 ) -> Project:
-    project = Project(name=name, key=key, description=description)
-    db.add(project)
-    db.commit()
-    db.refresh(project)
-    membership = ProjectMember(
-        project_id=project.id, user_id=owner_id, role=ProjectRole.maintainer
-    )
-    db.add(membership)
-    db.commit()
+    project = project_dao.create_project(db, name=name, key=key, description=description)
+    membership_dao.add_member(db, project.id, owner_id, ProjectRole.maintainer)
     return project
 
 
 def list_projects_for_user(db: Session, user_id: int) -> list[Project]:
-    return (
-        db.query(Project)
-        .join(ProjectMember, ProjectMember.project_id == Project.id)
-        .filter(ProjectMember.user_id == user_id)
-        .all()
-    )
+    return project_dao.list_projects_for_user(db, user_id)
 
 
 def add_member(
     db: Session, project_id: int, user_id: int, role: ProjectRole
 ) -> ProjectMember:
-    membership = ProjectMember(project_id=project_id, user_id=user_id, role=role)
-    db.add(membership)
-    db.commit()
-    db.refresh(membership)
-    return membership
+    return membership_dao.add_member(db, project_id, user_id, role)
 
 
 def get_membership(db: Session, project_id: int, user_id: int) -> ProjectMember | None:
-    return (
-        db.query(ProjectMember)
-        .filter(
-            ProjectMember.project_id == project_id,
-            ProjectMember.user_id == user_id,
-        )
-        .first()
-    )
+    return membership_dao.get_membership(db, project_id, user_id)
 
 
 def list_project_members(db: Session, project_id: int) -> list[ProjectMember]:
-    return (
-        db.query(ProjectMember)
-        .filter(ProjectMember.project_id == project_id)
-        .all()
-    )
+    return membership_dao.list_project_members(db, project_id)
 
 
 def remove_member(db: Session, project_id: int, user_id: int) -> bool:
-    membership = (
-        db.query(ProjectMember)
-        .filter(
-            ProjectMember.project_id == project_id,
-            ProjectMember.user_id == user_id,
-        )
-        .first()
-    )
-    if not membership:
-        return False
-    db.delete(membership)
-    db.commit()
-    return True
+    return membership_dao.remove_member(db, project_id, user_id)
